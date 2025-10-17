@@ -85,6 +85,36 @@ def get_restaurants(
     except Exception as e:
         return {"status": "ERROR", "results": [], "error_message": str(e)}
 
+
+def print_restaurant_table(data: Dict[str, Any], title: str = "Restaurant Results") -> str:
+    """
+    Print restaurant data in a formatted table and return a summary string.
+    This function is designed to be used as a tool by the agent.
+    """
+    try:
+        print_json_table(data, title)
+        
+        # Return a summary for the agent to use
+        if data.get("status") != "OK":
+            return f"❌ Error: {data.get('error_message', 'Unknown error')}"
+        
+        results = data.get("result", data.get("results", []))
+        if not results:
+            return "📭 No restaurants found matching your criteria."
+        
+        summary_lines = [f"✅ Found {len(results)} restaurants:"]
+        for i, restaurant in enumerate(results, 1):
+            name = restaurant.get('name', 'N/A')
+            rating = restaurant.get('rating', 'N/A')
+            address = restaurant.get('formatted_address', 'N/A')
+            summary_lines.append(f"{i}. {name} (Rating: {rating}/5) - {address}")
+        
+        return "\n".join(summary_lines)
+        
+    except Exception as e:
+        return f"❌ Error displaying results: {str(e)}"
+
+
 if __name__ == "__main__":
     # Simple test
     result = get_restaurants(query="cocktail bars", location="San Mateo, CA")
