@@ -2,3 +2,5 @@ google-genai
 google-adk
 googlemaps
 python-dotenv
+fastapi 
+uvicorn
