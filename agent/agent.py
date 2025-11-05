@@ -9,8 +9,8 @@ root_agent = Agent(
     description=(
         "Help user find the best restaurants in a city"
     ),
-    instruction= prompts.system_instruction_v3,
-    tools=[tools.get_restaurants]
+    instruction= prompts.system_instruction_v4,
+    tools=[tools.get_restaurants, tools.print_restaurant_table]
 )
 
 # run "adk run agent" in terminal to run the agent
