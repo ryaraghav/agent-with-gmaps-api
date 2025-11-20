@@ -9,7 +9,7 @@ root_agent = Agent(
     description=(
         "Help user find the best restaurants in a city"
     ),
-    instruction= prompts.system_instruction_v5,
+    instruction= prompts.system_instruction_v7,
     tools=[tools.get_restaurants]
 )
 

@@ -8,6 +8,7 @@ from google.genai import types
 import os
 import uuid
 import logging
+import re
 
 # Enable DEBUG logging
 logging.basicConfig(
@@ -211,8 +212,15 @@ async def run(req: Req):
                 pass
         
         if final_response:
+            # Strip markdown code blocks if present (agent sometimes wraps HTML in ```html blocks)
+            # Remove ```html or ``` at the start and ``` at the end
+            cleaned_response = re.sub(r'^```html?\s*', '', final_response, flags=re.MULTILINE)
+            cleaned_response = re.sub(r'^```\s*', '', cleaned_response, flags=re.MULTILINE)
+            cleaned_response = re.sub(r'\s*```$', '', cleaned_response, flags=re.MULTILINE)
+            cleaned_response = cleaned_response.strip()
+            
             return {
-                "response": final_response, 
+                "response": cleaned_response, 
                 "session_id": actual_session_id,
                 "message": "Use this session_id in your next request to continue the conversation" if req.session_id is None else None
             }
