@@ -523,6 +523,7 @@ STEP 1 - CALL THE TOOL:
 - When in doubt, try a location — do not ask the user for it if it appears anywhere in the message
 
 STEP 2 - FILTER RESULTS:
+- Aim to return 3-5 restaurants to the user — if you have more than 5 after filtering, keep the top 5 by rating
 - From the tool results, keep ONLY restaurants that satisfy ALL of the user's criteria
 - Wheelchair access requested? Only keep restaurants where wheelchair_accessible_entrance is True
 - Specific meal requested (breakfast/lunch/dinner)? Only keep restaurants where that field is True

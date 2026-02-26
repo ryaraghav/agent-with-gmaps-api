@@ -39,7 +39,7 @@ def get_restaurants(
     location: Optional[str] = None, #eg - San Francisco, CA
     place_type: str = "restaurant", #eg - restaurant, bar, cafe, etc. 
     #TO DO: query and place type seem redundant, can we remove one?
-    max_results: int = 5,
+    max_results: int = 10,
 ) -> Dict[str, Any]:
     """
     Simple restaurant search function.
