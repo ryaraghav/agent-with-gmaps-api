@@ -125,6 +125,10 @@ async def run_query(runner, session_service, query: str) -> str | None:
     # Mirror what app.py does: strip markdown wrappers, parse JSON, render HTML
     cleaned = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
     cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE).strip()
+    # Normalize Python-style booleans/None the LLM sometimes outputs
+    cleaned = re.sub(r'\bTrue\b', 'true', cleaned)
+    cleaned = re.sub(r'\bFalse\b', 'false', cleaned)
+    cleaned = re.sub(r'\bNone\b', 'null', cleaned)
     try:
         data = json.loads(cleaned)
         return render_html(data)

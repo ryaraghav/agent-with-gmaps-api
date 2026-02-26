@@ -304,6 +304,11 @@ async def run(req: Req):
             cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE)
             cleaned = cleaned.strip()
 
+            # Normalize Python-style booleans/None the LLM sometimes outputs
+            cleaned = re.sub(r'\bTrue\b', 'true', cleaned)
+            cleaned = re.sub(r'\bFalse\b', 'false', cleaned)
+            cleaned = re.sub(r'\bNone\b', 'null', cleaned)
+
             # Try to parse as JSON and render HTML
             try:
                 data = json.loads(cleaned)
