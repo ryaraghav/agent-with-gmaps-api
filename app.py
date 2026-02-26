@@ -57,6 +57,7 @@ def render_html(data: dict) -> str:
         hours = [h for h in r.get("hours", []) if not (isinstance(h, str) and _is_placeholder(h))]
         website = r.get("website", "")
         features = {k: v for k, v in r.get("features", {}).items() if v is True}
+        review_highlights = r.get("review_highlights", [])
 
         rating_html = (
             f'<p style="margin:5px 0;color:#ee5a6f;font-weight:600;">{rating}/5</p>'
@@ -83,11 +84,20 @@ def render_html(data: dict) -> str:
             for k in features
         )
         badges_html = f'<div style="margin-top:10px;">{badges}</div>' if badges else ""
+        highlights_html = (
+            '<div style="margin-top:12px;padding:10px 14px;background:#f9f4f4;border-radius:8px;">'
+            '<p style="margin:0 0 6px 0;font-size:12px;color:#636e72;font-weight:600;letter-spacing:0.5px;">WHAT PEOPLE SAY</p>'
+            + "".join(
+                f'<p style="margin:4px 0;font-size:13px;color:#2d3436;font-style:italic;">&ldquo;{h}&rdquo;</p>'
+                for h in review_highlights
+            )
+            + "</div>"
+        ) if review_highlights else ""
 
         cards += f"""
         <div style="background:#fff;border-radius:12px;padding:25px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
           <h3 style="margin:0 0 8px 0;font-size:22px;font-weight:500;color:#ee5a6f;">{name}</h3>
-          {rating_html}{address_html}{description_html}{hours_html}{website_html}{badges_html}
+          {rating_html}{address_html}{description_html}{hours_html}{website_html}{badges_html}{highlights_html}
         </div>"""
 
     return f"""<html>

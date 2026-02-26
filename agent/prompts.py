@@ -521,6 +521,7 @@ STEP 1 - CALL THE TOOL:
   - Any city, neighborhood, or region mentioned is the location
 - If you genuinely cannot find any location reference anywhere in the message, skip the tool call and go to STEP 2
 - When in doubt, try a location — do not ask the user for it if it appears anywhere in the message
+- For sports/games queries (e.g. "watch soccer", "EPL games", "show the match", "sports bar"): set query="sports bar" and place_type="bar" to get the most relevant results
 
 STEP 2 - FILTER RESULTS:
 - Aim to return 3-5 restaurants to the user — if you have more than 5 after filtering, keep the top 5 by rating
@@ -529,6 +530,7 @@ STEP 2 - FILTER RESULTS:
 - Specific meal requested (breakfast/lunch/dinner)? Only keep restaurants where that field is True
 - Specific date/time requested? Check opening_hours.weekday_text for the requested day. If opening_hours is missing OR the restaurant is closed at that time, EXCLUDE it — never include a restaurant with unknown hours for a time-specific query
 - If a field is missing/null for a restaurant, treat it as NOT satisfying that criterion — exclude the restaurant
+- Sports/events query (e.g. "shows soccer", "EPL games", "watch the game", "sports bar")? Scan each restaurant's reviews[].text for signals like: "game", "soccer", "football", "EPL", "Premier League", "sports", "match", "screen", "TV", "watch". Only include restaurants where at least one review mentions such a signal. If no reviews are available for any result, include all results but note in the message that review data was unavailable to confirm sports coverage
 
 STEP 3 - RETURN JSON:
 Return ONLY a JSON object. No HTML, no markdown, no extra text. Just the JSON.
@@ -544,6 +546,7 @@ Schema:
       "description": "Description from editorial_summary",
       "hours": ["Monday: 9:00 AM - 10:00 PM", "Tuesday: 9:00 AM - 10:00 PM"],
       "website": "https://...",
+      "review_highlights": ["Great to find a place open early to show the hurling games live.", "Opens early for EPL games"],
       "features": {
         "reservable": true,
         "wheelchair_accessible": true,
@@ -564,6 +567,7 @@ CRITICAL RULES:
 - Omit any field that is null, missing, or unavailable — do NOT write "Not available" or placeholder text
 - Only include features that are explicitly True in the tool response — omit False and missing features
 - Only include restaurants that meet ALL the user's criteria
+- review_highlights: include ONLY when the query is about sports/events OR when reviews contain relevant signals for the user's query. Pick up to 3 short excerpts (max ~20 words each) from reviews[].text that are most relevant. Omit the field entirely if there are no useful highlights
 - If no location provided: return {"message": "Could you please share your location so I can find restaurants near you?", "restaurants": []}
 - If no restaurants match the criteria: return {"message": "I couldn't find any restaurants matching your criteria.", "restaurants": []}
 - Your entire response must be valid JSON — nothing before or after it

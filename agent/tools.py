@@ -29,7 +29,8 @@ DETAIL_FIELDS = [
     "editorial_summary", "price_level", "opening_hours", "place_id", "formatted_phone_number",
     "reservable", "serves_breakfast", "serves_dinner", "serves_lunch", "serves_vegetarian_food", 
     "serves_wine", "takeout", "serves_brunch", "serves_beer", "business_status",
-    "curbside_pickup", "wheelchair_accessible_entrance", "current_opening_hours"
+    "curbside_pickup", "wheelchair_accessible_entrance", "current_opening_hours",
+    "reviews"
 ]
 
 def get_restaurants(
