@@ -90,16 +90,11 @@ def render_html(data: dict) -> str:
           {rating_html}{address_html}{description_html}{hours_html}{website_html}{badges_html}
         </div>"""
 
-    no_results_msg = (
-        "" if restaurants else
-        '<p style="color:#636e72;font-style:italic;">No restaurants found matching your criteria.</p>'
-    )
-
     return f"""<html>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;background:#fafafa;padding:20px;color:#2d3436;max-width:620px;margin:0 auto;">
   <h2 style="font-size:28px;font-weight:300;letter-spacing:1.5px;color:#ee5a6f;border-bottom:2px solid #ffe5d9;padding-bottom:12px;">Restaurant Recommendations</h2>
   <p style="font-size:15px;line-height:1.8;margin-bottom:24px;">{message}</p>
-  {cards or no_results_msg}
+  {cards}
   <p style="margin-top:30px;padding-top:20px;border-top:1px solid #ffe5d9;color:#636e72;font-size:13px;">Reply to this email if you have any follow-up questions.</p>
 </body>
 </html>"""
