@@ -9,6 +9,7 @@ import os
 import uuid
 import logging
 import re
+import json
 
 # Enable DEBUG logging
 logging.basicConfig(
@@ -17,6 +18,92 @@ logging.basicConfig(
 )
 
 load_dotenv()
+
+
+def _is_placeholder(s: str) -> bool:
+    """Return True if a string is a known placeholder that should not be rendered."""
+    low = s.lower().strip()
+    return "not available" in low or low == "n/a" or low == ""
+
+
+def render_html(data: dict) -> str:
+    """Convert structured restaurant JSON from the agent into a styled HTML email."""
+    message = data.get("message", "Here are your restaurant recommendations.")
+    restaurants = data.get("restaurants", [])
+
+    FEATURE_LABELS = {
+        "reservable": "Reservations",
+        "wheelchair_accessible": "Wheelchair Accessible",
+        "serves_breakfast": "Breakfast",
+        "serves_lunch": "Lunch",
+        "serves_dinner": "Dinner",
+        "serves_brunch": "Brunch",
+        "serves_vegetarian_food": "Vegetarian",
+        "serves_wine": "Wine",
+        "serves_beer": "Beer",
+        "takeout": "Takeout",
+    }
+
+    cards = ""
+    for r in restaurants:
+        name = r.get("name", "")
+        address = r.get("address", "")
+        rating = r.get("rating")
+        if isinstance(rating, str) and _is_placeholder(rating):
+            rating = None
+        description = r.get("description", "")
+        if isinstance(description, str) and _is_placeholder(description):
+            description = ""
+        hours = [h for h in r.get("hours", []) if not (isinstance(h, str) and _is_placeholder(h))]
+        website = r.get("website", "")
+        features = {k: v for k, v in r.get("features", {}).items() if v is True}
+
+        rating_html = (
+            f'<p style="margin:5px 0;color:#ee5a6f;font-weight:600;">{rating}/5</p>'
+            if rating else ""
+        )
+        address_html = (
+            f'<p style="margin:5px 0;color:#636e72;font-size:14px;">{address}</p>'
+            if address else ""
+        )
+        description_html = (
+            f'<p style="margin:10px 0;font-style:italic;opacity:0.9;">{description}</p>'
+            if description else ""
+        )
+        hours_html = (
+            f'<p style="margin:5px 0;font-size:13px;color:#636e72;"><strong>Hours:</strong> {", ".join(hours)}</p>'
+            if hours else ""
+        )
+        website_html = (
+            f'<p style="margin:5px 0;"><a href="{website}" style="color:#ee5a6f;text-decoration:none;font-size:13px;">Visit Website</a></p>'
+            if website else ""
+        )
+        badges = "".join(
+            f'<span style="background:#ffe5d9;border-radius:20px;padding:4px 12px;font-size:12px;margin-right:6px;margin-bottom:4px;display:inline-block;">{FEATURE_LABELS.get(k, k)}</span>'
+            for k in features
+        )
+        badges_html = f'<div style="margin-top:10px;">{badges}</div>' if badges else ""
+
+        cards += f"""
+        <div style="background:#fff;border-radius:12px;padding:25px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+          <h3 style="margin:0 0 8px 0;font-size:22px;font-weight:500;color:#ee5a6f;">{name}</h3>
+          {rating_html}{address_html}{description_html}{hours_html}{website_html}{badges_html}
+        </div>"""
+
+    no_results_msg = (
+        "" if restaurants else
+        '<p style="color:#636e72;font-style:italic;">No restaurants found matching your criteria.</p>'
+    )
+
+    return f"""<html>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;background:#fafafa;padding:20px;color:#2d3436;max-width:620px;margin:0 auto;">
+  <h2 style="font-size:28px;font-weight:300;letter-spacing:1.5px;color:#ee5a6f;border-bottom:2px solid #ffe5d9;padding-bottom:12px;">Restaurant Recommendations</h2>
+  <p style="font-size:15px;line-height:1.8;margin-bottom:24px;">{message}</p>
+  {cards or no_results_msg}
+  <p style="margin-top:30px;padding-top:20px;border-top:1px solid #ffe5d9;color:#636e72;font-size:13px;">Reply to this email if you have any follow-up questions.</p>
+</body>
+</html>"""
+
 
 # This tells the FastAPI app what the request body POST request (JSON) should look like
 class Req(BaseModel):
@@ -212,21 +299,28 @@ async def run(req: Req):
                 pass
         
         if final_response:
-            # Strip markdown code blocks if present (agent sometimes wraps HTML in ```html blocks)
-            # Remove ```html or ``` at the start and ``` at the end
-            cleaned_response = re.sub(r'^```html?\s*', '', final_response, flags=re.MULTILINE)
-            cleaned_response = re.sub(r'^```\s*', '', cleaned_response, flags=re.MULTILINE)
-            cleaned_response = re.sub(r'\s*```$', '', cleaned_response, flags=re.MULTILINE)
-            cleaned_response = cleaned_response.strip()
-            
+            # Strip markdown code blocks if present
+            cleaned = re.sub(r'^```(?:json)?\s*', '', final_response, flags=re.MULTILINE)
+            cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE)
+            cleaned = cleaned.strip()
+
+            # Try to parse as JSON and render HTML
+            try:
+                data = json.loads(cleaned)
+                html_response = render_html(data)
+            except (json.JSONDecodeError, Exception):
+                # Fallback: return raw response as-is (e.g. if agent returned HTML directly)
+                logging.warning("Agent response was not valid JSON, returning raw response")
+                html_response = cleaned
+
             return {
-                "response": cleaned_response, 
+                "response": html_response,
                 "session_id": actual_session_id,
                 "message": "Use this session_id in your next request to continue the conversation" if req.session_id is None else None
             }
         else:
             return {
-                "response": "I received your query but couldn't generate a response.", 
+                "response": "I received your query but couldn't generate a response.",
                 "session_id": actual_session_id
             }
         
