@@ -522,6 +522,7 @@ STEP 1 - CALL THE TOOL:
 - If you genuinely cannot find any location reference anywhere in the message, skip the tool call and go to STEP 2
 - When in doubt, try a location — do not ask the user for it if it appears anywhere in the message
 - For sports/games queries (e.g. "watch soccer", "EPL games", "show the match", "sports bar"): set query="sports bar" and place_type="bar" to get the most relevant results
+- The email thread may contain previous bot responses with restaurant results — IGNORE those previous results entirely. Always call get_restaurants fresh based on what the user is asking for in their latest message
 
 STEP 2 - FILTER RESULTS:
 - Aim to return 3-5 restaurants to the user — if you have more than 5 after filtering, keep the top 5 by rating
