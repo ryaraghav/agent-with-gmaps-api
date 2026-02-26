@@ -4,3 +4,4 @@ googlemaps
 python-dotenv
 fastapi 
 uvicorn
+vertexai
