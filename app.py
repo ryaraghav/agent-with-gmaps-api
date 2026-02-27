@@ -11,11 +11,14 @@ import logging
 import re
 import json
 
-# Enable DEBUG logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
-)
+# Structured JSON logging for Cloud Run / Cloud Logging
+logging.basicConfig(level=logging.WARNING)  # suppress noisy library DEBUG output
+
+def _log(severity: str, message: str, **kwargs):
+    """Emit a structured JSON log entry that Cloud Logging can parse and filter."""
+    entry = {"severity": severity, "message": message}
+    entry.update(kwargs)
+    print(json.dumps(entry), flush=True)
 
 load_dotenv()
 
@@ -189,6 +192,8 @@ async def run(req: Req):
         query = req.query.strip()
         if req.from_:
             query = f"{query} in {req.from_}"
+
+        _log("INFO", "request_received", query_preview=query[:300], from_=req.from_)
         
         # Handle session_id based on session service type
         user_id = req.user_id or "default_user"
@@ -282,6 +287,11 @@ async def run(req: Req):
                     text_parts = [part.text for part in event.content.parts if hasattr(part, 'text') and part.text]
                     if text_parts:
                         final_response = ' '.join(text_parts)
+                        _log("INFO", "agent_response_received", response_length=len(final_response), response_preview=final_response[:300])
+                    else:
+                        _log("WARNING", "agent_final_event_empty_parts")
+                else:
+                    _log("WARNING", "agent_final_event_no_content")
                 break
         
         # Ensure session is properly maintained for follow-up questions
@@ -317,10 +327,11 @@ async def run(req: Req):
             # Try to parse as JSON and render HTML
             try:
                 data = json.loads(cleaned)
+                restaurant_count = len(data.get("restaurants", []))
+                _log("INFO", "json_parse_success", restaurant_count=restaurant_count, message=data.get("message", "")[:200])
                 html_response = render_html(data)
-            except (json.JSONDecodeError, Exception):
-                # Fallback: return raw response as-is (e.g. if agent returned HTML directly)
-                logging.warning("Agent response was not valid JSON, returning raw response")
+            except (json.JSONDecodeError, Exception) as parse_err:
+                _log("ERROR", "json_parse_failed", error=str(parse_err), response_preview=cleaned[:300])
                 html_response = cleaned
 
             return {
@@ -329,14 +340,16 @@ async def run(req: Req):
                 "message": "Use this session_id in your next request to continue the conversation" if req.session_id is None else None
             }
         else:
+            _log("ERROR", "no_final_response", query_preview=query[:300])
             return {
                 "response": "I received your query but couldn't generate a response.",
                 "session_id": actual_session_id
             }
-        
+
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
+        _log("ERROR", "unhandled_exception", error=str(e), traceback=error_details[:1000])
         return {"error": f"Internal server error: {str(e)}", "details": error_details}
 
 @app.post("/agent-response")

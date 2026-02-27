@@ -12,8 +12,14 @@ except ImportError:
     from json_utils import print_json_table
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 log = logging.getLogger(__name__)
+
+def _log(severity: str, message: str, **kwargs):
+    import json
+    entry = {"severity": severity, "message": message}
+    entry.update(kwargs)
+    print(json.dumps(entry), flush=True)
 
 # API Key
 MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
@@ -46,6 +52,7 @@ def get_restaurants(
     Simple restaurant search function.
     Returns: {"status": "OK", "results": List[Dict]}
     """
+    _log("INFO", "tool_called", query=query, location=location, place_type=place_type, place_id=place_id)
     try:
         # Direct place lookup by ID
         if place_id:
@@ -81,9 +88,11 @@ def get_restaurants(
             else:
                 detailed_results.append(place)
         
+        _log("INFO", "tool_result", result_count=len(detailed_results), query=query, location=location)
         return {"status": "OK", "results": detailed_results}
 
     except Exception as e:
+        _log("ERROR", "tool_error", error=str(e), query=query, location=location)
         return {"status": "ERROR", "results": [], "error_message": str(e)}
 
 
