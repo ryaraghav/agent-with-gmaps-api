@@ -328,7 +328,7 @@ async def run(req: Req):
             try:
                 data = json.loads(cleaned)
                 restaurant_count = len(data.get("restaurants", []))
-                _log("INFO", "json_parse_success", restaurant_count=restaurant_count, message=data.get("message", "")[:200])
+                _log("INFO", "json_parse_success", restaurant_count=restaurant_count, agent_message=data.get("message", "")[:200])
                 html_response = render_html(data)
             except (json.JSONDecodeError, Exception) as parse_err:
                 _log("ERROR", "json_parse_failed", error=str(parse_err), response_preview=cleaned[:300])
