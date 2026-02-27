@@ -11,11 +11,14 @@ import logging
 import re
 import json
 
-# Enable DEBUG logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
-)
+# Structured JSON logging for Cloud Run / Cloud Logging
+logging.basicConfig(level=logging.WARNING)  # suppress noisy library DEBUG output
+
+def _log(severity: str, message: str, **kwargs):
+    """Emit a structured JSON log entry that Cloud Logging can parse and filter."""
+    entry = {"severity": severity, "message": message}
+    entry.update(kwargs)
+    print(json.dumps(entry), flush=True)
 
 load_dotenv()
 
@@ -24,6 +27,53 @@ def _is_placeholder(s: str) -> bool:
     """Return True if a string is a known placeholder that should not be rendered."""
     low = s.lower().strip()
     return "not available" in low or low == "n/a" or low == ""
+
+
+# Maps Places API field names → feature keys used in render_html
+_PLACES_FEATURE_MAP = {
+    "reservable": "reservable",
+    "wheelchair_accessible_entrance": "wheelchair_accessible",
+    "serves_breakfast": "serves_breakfast",
+    "serves_lunch": "serves_lunch",
+    "serves_dinner": "serves_dinner",
+    "serves_brunch": "serves_brunch",
+    "serves_vegetarian_food": "serves_vegetarian_food",
+    "serves_wine": "serves_wine",
+    "serves_beer": "serves_beer",
+    "takeout": "takeout",
+}
+_PLACES_FEATURE_FIELDS = list(_PLACES_FEATURE_MAP.keys())
+
+
+def _enrich_features(restaurants: list) -> list:
+    """Re-fetch boolean feature fields from Places API using place_id.
+    Overwrites the LLM-generated features dict with authoritative API data.
+    Falls back to LLM data silently if place_id is missing or the call fails.
+    """
+    try:
+        from agent.tools import gmaps_client
+    except Exception:
+        return restaurants
+
+    enriched = []
+    for r in restaurants:
+        place_id = r.get("place_id")
+        if place_id:
+            try:
+                detail = gmaps_client.place(place_id=place_id, fields=_PLACES_FEATURE_FIELDS)
+                if detail.get("status") == "OK":
+                    raw = detail.get("result", {})
+                    features = {
+                        feat_key: True
+                        for api_key, feat_key in _PLACES_FEATURE_MAP.items()
+                        if raw.get(api_key) is True
+                    }
+                    r["features"] = features
+                    r["reservable"] = raw.get("reservable")
+            except Exception:
+                pass  # keep LLM-provided features as fallback
+        enriched.append(r)
+    return enriched
 
 
 def render_html(data: dict) -> str:
@@ -57,6 +107,10 @@ def render_html(data: dict) -> str:
         hours = [h for h in r.get("hours", []) if not (isinstance(h, str) and _is_placeholder(h))]
         website = r.get("website", "")
         features = {k: v for k, v in r.get("features", {}).items() if v is True}
+        # Top-level reservable field (set by agent or enrichment) is authoritative
+        if r.get("reservable") is True:
+            features["reservable"] = True
+        review_highlights = r.get("review_highlights", [])
 
         rating_html = (
             f'<p style="margin:5px 0;color:#ee5a6f;font-weight:600;">{rating}/5</p>'
@@ -83,23 +137,27 @@ def render_html(data: dict) -> str:
             for k in features
         )
         badges_html = f'<div style="margin-top:10px;">{badges}</div>' if badges else ""
+        highlights_html = (
+            '<div style="margin-top:12px;padding:10px 14px;background:#f9f4f4;border-radius:8px;">'
+            '<p style="margin:0 0 6px 0;font-size:12px;color:#636e72;font-weight:600;letter-spacing:0.5px;">WHAT PEOPLE SAY</p>'
+            + "".join(
+                f'<p style="margin:4px 0;font-size:13px;color:#2d3436;font-style:italic;">&ldquo;{h}&rdquo;</p>'
+                for h in review_highlights
+            )
+            + "</div>"
+        ) if review_highlights else ""
 
         cards += f"""
         <div style="background:#fff;border-radius:12px;padding:25px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
           <h3 style="margin:0 0 8px 0;font-size:22px;font-weight:500;color:#ee5a6f;">{name}</h3>
-          {rating_html}{address_html}{description_html}{hours_html}{website_html}{badges_html}
+          {rating_html}{address_html}{description_html}{hours_html}{website_html}{badges_html}{highlights_html}
         </div>"""
-
-    no_results_msg = (
-        "" if restaurants else
-        '<p style="color:#636e72;font-style:italic;">No restaurants found matching your criteria.</p>'
-    )
 
     return f"""<html>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;background:#fafafa;padding:20px;color:#2d3436;max-width:620px;margin:0 auto;">
-  <h2 style="font-size:28px;font-weight:300;letter-spacing:1.5px;color:#ee5a6f;border-bottom:2px solid #ffe5d9;padding-bottom:12px;">Restaurant Recommendations</h2>
+  <h2 style="font-size:28px;font-weight:300;letter-spacing:1.5px;color:#ee5a6f;border-bottom:2px solid #ffe5d9;padding-bottom:12px;">AI Concierge recommends</h2>
   <p style="font-size:15px;line-height:1.8;margin-bottom:24px;">{message}</p>
-  {cards or no_results_msg}
+  {cards}
   <p style="margin-top:30px;padding-top:20px;border-top:1px solid #ffe5d9;color:#636e72;font-size:13px;">Reply to this email if you have any follow-up questions.</p>
 </body>
 </html>"""
@@ -184,6 +242,8 @@ async def run(req: Req):
         query = req.query.strip()
         if req.from_:
             query = f"{query} in {req.from_}"
+
+        _log("INFO", "request_received", query_preview=query[:300], from_=req.from_)
         
         # Handle session_id based on session service type
         user_id = req.user_id or "default_user"
@@ -277,6 +337,11 @@ async def run(req: Req):
                     text_parts = [part.text for part in event.content.parts if hasattr(part, 'text') and part.text]
                     if text_parts:
                         final_response = ' '.join(text_parts)
+                        _log("INFO", "agent_response_received", response_length=len(final_response), response_preview=final_response[:300])
+                    else:
+                        _log("WARNING", "agent_final_event_empty_parts")
+                else:
+                    _log("WARNING", "agent_final_event_no_content")
                 break
         
         # Ensure session is properly maintained for follow-up questions
@@ -304,13 +369,20 @@ async def run(req: Req):
             cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE)
             cleaned = cleaned.strip()
 
+            # Normalize Python-style booleans/None the LLM sometimes outputs
+            cleaned = re.sub(r'\bTrue\b', 'true', cleaned)
+            cleaned = re.sub(r'\bFalse\b', 'false', cleaned)
+            cleaned = re.sub(r'\bNone\b', 'null', cleaned)
+
             # Try to parse as JSON and render HTML
             try:
                 data = json.loads(cleaned)
+                data["restaurants"] = _enrich_features(data.get("restaurants", []))
+                restaurant_count = len(data.get("restaurants", []))
+                _log("INFO", "json_parse_success", restaurant_count=restaurant_count, agent_message=data.get("message", "")[:200])
                 html_response = render_html(data)
-            except (json.JSONDecodeError, Exception):
-                # Fallback: return raw response as-is (e.g. if agent returned HTML directly)
-                logging.warning("Agent response was not valid JSON, returning raw response")
+            except (json.JSONDecodeError, Exception) as parse_err:
+                _log("ERROR", "json_parse_failed", error=str(parse_err), response_preview=cleaned[:300])
                 html_response = cleaned
 
             return {
@@ -319,14 +391,16 @@ async def run(req: Req):
                 "message": "Use this session_id in your next request to continue the conversation" if req.session_id is None else None
             }
         else:
+            _log("ERROR", "no_final_response", query_preview=query[:300])
             return {
                 "response": "I received your query but couldn't generate a response.",
                 "session_id": actual_session_id
             }
-        
+
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
+        _log("ERROR", "unhandled_exception", error=str(e), traceback=error_details[:1000])
         return {"error": f"Internal server error: {str(e)}", "details": error_details}
 
 @app.post("/agent-response")

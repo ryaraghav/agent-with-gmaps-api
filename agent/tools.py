@@ -12,8 +12,14 @@ except ImportError:
     from json_utils import print_json_table
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 log = logging.getLogger(__name__)
+
+def _log(severity: str, message: str, **kwargs):
+    import json
+    entry = {"severity": severity, "message": message}
+    entry.update(kwargs)
+    print(json.dumps(entry), flush=True)
 
 # API Key
 MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
@@ -29,7 +35,8 @@ DETAIL_FIELDS = [
     "editorial_summary", "price_level", "opening_hours", "place_id", "formatted_phone_number",
     "reservable", "serves_breakfast", "serves_dinner", "serves_lunch", "serves_vegetarian_food", 
     "serves_wine", "takeout", "serves_brunch", "serves_beer", "business_status",
-    "curbside_pickup", "wheelchair_accessible_entrance", "current_opening_hours"
+    "curbside_pickup", "wheelchair_accessible_entrance", "current_opening_hours",
+    "reviews"
 ]
 
 def get_restaurants(
@@ -39,12 +46,13 @@ def get_restaurants(
     location: Optional[str] = None, #eg - San Francisco, CA
     place_type: str = "restaurant", #eg - restaurant, bar, cafe, etc. 
     #TO DO: query and place type seem redundant, can we remove one?
-    max_results: int = 5,
+    max_results: int = 10,
 ) -> Dict[str, Any]:
     """
     Simple restaurant search function.
     Returns: {"status": "OK", "results": List[Dict]}
     """
+    _log("INFO", "tool_called", query=query, location=location, place_type=place_type, place_id=place_id)
     try:
         # Direct place lookup by ID
         if place_id:
@@ -80,9 +88,11 @@ def get_restaurants(
             else:
                 detailed_results.append(place)
         
+        _log("INFO", "tool_result", result_count=len(detailed_results), query=query, location=location)
         return {"status": "OK", "results": detailed_results}
 
     except Exception as e:
+        _log("ERROR", "tool_error", error=str(e), query=query, location=location)
         return {"status": "ERROR", "results": [], "error_message": str(e)}
 
 

@@ -17,7 +17,7 @@ from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types, Client
 from agent import prompts, tools
-from app import render_html
+from app import render_html, _enrich_features
 
 load_dotenv()
 
@@ -75,6 +75,45 @@ TEST_CASES = [
         ),
         "must_not_contain": ["Wheelchair Accessible Entrance: Not available"],
     },
+    {
+        "name": "reservations_followup",
+        "query": (
+            "do they accept reservations?\n\n"
+            "---------- Forwarded message ---------\n"
+            "From: ccpaxbot@gmail.com\n"
+            "AI Concierge recommends\n"
+            "Here are some upscale restaurants in Palo Alto that serve vegetarian food:\n"
+            "Zola\n4.4/5\n565 Bryant St, Palo Alto, CA 94301\n"
+            "Ettan\n4.6/5\n518 Bryant St, Palo Alto, CA 94301"
+        ),
+        "criteria": (
+            "This is a follow-up asking whether Zola and Ettan in Palo Alto accept reservations. "
+            "PASS if the response positively confirms that at least one of the restaurants accepts reservations "
+            "(either via a 'Reservations' badge on the card, or the message text confirming it). "
+            "FAIL only if the response gives zero positive reservation confirmations — i.e. says 'cannot confirm' "
+            "or 'call ahead' for ALL restaurants without confirming any."
+        ),
+    },
+    {
+        "name": "romantic_veg_no_zero_results",
+        "query": "Find us a romantic restaurant in Palo Alto for Friday night. Must have veg food",
+        "criteria": (
+            "User asked for a romantic vegetarian restaurant in Palo Alto. "
+            "Response should recommend at least 1 restaurant with vegetarian food. "
+            "FAIL if the response returns zero restaurants or says it couldn't find any. "
+            "'Romantic' is a soft criterion and should NOT cause zero results."
+        ),
+    },
+    {
+        "name": "large_group_seattle_not_only_dicks",
+        "query": "Find a restaurant for a large team dinner in Seattle, WA. We'd like a nice place",
+        "criteria": (
+            "User asked for restaurants suitable for a large group in Seattle. "
+            "Response should include at least 2 restaurants. "
+            "FAIL if only Dick's Drive-In or only fast food is returned — that is not suitable for a team dinner. "
+            "FAIL if fewer than 2 restaurants are recommended."
+        ),
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -125,8 +164,13 @@ async def run_query(runner, session_service, query: str) -> str | None:
     # Mirror what app.py does: strip markdown wrappers, parse JSON, render HTML
     cleaned = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
     cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE).strip()
+    # Normalize Python-style booleans/None the LLM sometimes outputs
+    cleaned = re.sub(r'\bTrue\b', 'true', cleaned)
+    cleaned = re.sub(r'\bFalse\b', 'false', cleaned)
+    cleaned = re.sub(r'\bNone\b', 'null', cleaned)
     try:
         data = json.loads(cleaned)
+        data["restaurants"] = _enrich_features(data.get("restaurants", []))
         return render_html(data)
     except (json.JSONDecodeError, Exception):
         return cleaned  # fallback: return raw if not JSON
