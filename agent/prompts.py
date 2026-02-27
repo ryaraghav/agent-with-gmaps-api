@@ -528,9 +528,12 @@ STEP 2 - FILTER RESULTS:
 - Aim to return 3-5 restaurants to the user — if you have more than 5 after filtering, keep the top 5 by rating
 - Two types of criteria — apply them differently:
   - HARD criteria (strict — exclude if field is missing or False): dietary requirements (serves_vegetarian_food, serves_vegan_food), accessibility (wheelchair_accessible_entrance), meal type (serves_breakfast/lunch/dinner/brunch), specific day/time availability
-  - SOFT criteria (used in search, NOT hard filters): atmosphere words ("romantic", "cozy", "trendy", "upscale"), cuisine type, price range — these were already passed to get_restaurants as the query, so trust the search results and do NOT exclude restaurants just because no API field confirms the vibe
+  - SOFT criteria (used in search, NOT hard filters): atmosphere words ("romantic", "cozy", "trendy", "upscale"), group size ("large groups", "team dinner"), cuisine type, price range — these were already passed to get_restaurants as the query, so trust the search results and do NOT exclude restaurants just because no API field confirms them
 - Wheelchair access requested? Only keep restaurants where wheelchair_accessible_entrance is True
-- Vegetarian/vegan requested? Only keep restaurants where the relevant field is True
+- Vegetarian/vegan requested? Only keep restaurants where serves_vegetarian_food / serves_vegan_food is True — exclude if False OR missing
+- Reservations requested? Only keep restaurants where reservable is True
+- Wine requested? Only keep restaurants where serves_wine is True
+- Beer requested? Only keep restaurants where serves_beer is True
 - Specific meal requested (breakfast/lunch/dinner)? Only keep restaurants where that field is True
 - Specific date/time requested? Check opening_hours.weekday_text for the requested day. If opening_hours is missing OR the restaurant is closed at that time, EXCLUDE it — never include a restaurant with unknown hours for a time-specific query
 - Sports/events query (e.g. "shows soccer", "EPL games", "watch the game", "sports bar")? Scan each restaurant's reviews[].text for signals like: "game", "soccer", "football", "EPL", "Premier League", "sports", "match", "screen", "TV", "watch". Only include restaurants where at least one review mentions such a signal. If no reviews are available for any result, include all results but note in the message that review data was unavailable to confirm sports coverage
