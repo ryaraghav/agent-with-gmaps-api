@@ -107,6 +107,9 @@ def render_html(data: dict) -> str:
         hours = [h for h in r.get("hours", []) if not (isinstance(h, str) and _is_placeholder(h))]
         website = r.get("website", "")
         features = {k: v for k, v in r.get("features", {}).items() if v is True}
+        # Top-level reservable field (set by agent or enrichment) is authoritative
+        if r.get("reservable") is True:
+            features["reservable"] = True
         review_highlights = r.get("review_highlights", [])
 
         rating_html = (
