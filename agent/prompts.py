@@ -556,8 +556,9 @@ Schema:
       "hours": ["Monday: 9:00 AM - 10:00 PM", "Tuesday: 9:00 AM - 10:00 PM"],
       "website": "https://...",
       "review_highlights": ["Great to find a place open early to show the hurling games live.", "Opens early for EPL games"],
+      "place_id": "ChIJ...",
+      "reservable": true,
       "features": {
-        "reservable": true,
         "wheelchair_accessible": true,
         "serves_breakfast": true,
         "serves_lunch": true,

@@ -29,6 +29,53 @@ def _is_placeholder(s: str) -> bool:
     return "not available" in low or low == "n/a" or low == ""
 
 
+# Maps Places API field names → feature keys used in render_html
+_PLACES_FEATURE_MAP = {
+    "reservable": "reservable",
+    "wheelchair_accessible_entrance": "wheelchair_accessible",
+    "serves_breakfast": "serves_breakfast",
+    "serves_lunch": "serves_lunch",
+    "serves_dinner": "serves_dinner",
+    "serves_brunch": "serves_brunch",
+    "serves_vegetarian_food": "serves_vegetarian_food",
+    "serves_wine": "serves_wine",
+    "serves_beer": "serves_beer",
+    "takeout": "takeout",
+}
+_PLACES_FEATURE_FIELDS = list(_PLACES_FEATURE_MAP.keys())
+
+
+def _enrich_features(restaurants: list) -> list:
+    """Re-fetch boolean feature fields from Places API using place_id.
+    Overwrites the LLM-generated features dict with authoritative API data.
+    Falls back to LLM data silently if place_id is missing or the call fails.
+    """
+    try:
+        from agent.tools import gmaps_client
+    except Exception:
+        return restaurants
+
+    enriched = []
+    for r in restaurants:
+        place_id = r.get("place_id")
+        if place_id:
+            try:
+                detail = gmaps_client.place(place_id=place_id, fields=_PLACES_FEATURE_FIELDS)
+                if detail.get("status") == "OK":
+                    raw = detail.get("result", {})
+                    features = {
+                        feat_key: True
+                        for api_key, feat_key in _PLACES_FEATURE_MAP.items()
+                        if raw.get(api_key) is True
+                    }
+                    r["features"] = features
+                    r["reservable"] = raw.get("reservable")
+            except Exception:
+                pass  # keep LLM-provided features as fallback
+        enriched.append(r)
+    return enriched
+
+
 def render_html(data: dict) -> str:
     """Convert structured restaurant JSON from the agent into a styled HTML email."""
     message = data.get("message", "Here are your restaurant recommendations.")
@@ -327,6 +374,7 @@ async def run(req: Req):
             # Try to parse as JSON and render HTML
             try:
                 data = json.loads(cleaned)
+                data["restaurants"] = _enrich_features(data.get("restaurants", []))
                 restaurant_count = len(data.get("restaurants", []))
                 _log("INFO", "json_parse_success", restaurant_count=restaurant_count, agent_message=data.get("message", "")[:200])
                 html_response = render_html(data)
