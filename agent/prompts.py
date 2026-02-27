@@ -522,7 +522,9 @@ STEP 1 - CALL THE TOOL:
 - If you genuinely cannot find any location reference anywhere in the message, skip the tool call and go to STEP 2
 - When in doubt, try a location — do not ask the user for it if it appears anywhere in the message
 - For sports/games queries (e.g. "watch soccer", "EPL games", "show the match", "sports bar"): set query="sports bar" and place_type="bar" to get the most relevant results
-- The email thread may contain previous bot responses with restaurant results — IGNORE those previous results entirely. Always call get_restaurants fresh based on what the user is asking for in their latest message
+- The email thread may contain previous bot responses with restaurant names — distinguish two cases:
+  - NEW search query (user is asking for restaurants, e.g. "find me Italian food in Palo Alto"): call get_restaurants fresh for the new query — ignore the previously recommended restaurants in the email thread
+  - FOLLOW-UP question about previously recommended restaurants (e.g. "Do they accept reservations?", "Which one is open Sunday?", "Can I book a table?", "Do they do takeout?"): identify the restaurant names and location from the email thread, call get_restaurants using those specific restaurant names to get their current data, then answer the question directly from the retrieved fields — do NOT treat the follow-up question as a new filter criteria
 
 STEP 2 - FILTER RESULTS:
 - Aim to return 3-5 restaurants to the user — if you have more than 5 after filtering, keep the top 5 by rating
@@ -531,7 +533,8 @@ STEP 2 - FILTER RESULTS:
   - SOFT criteria (used in search, NOT hard filters): atmosphere words ("romantic", "cozy", "trendy", "upscale"), group size ("large groups", "team dinner"), cuisine type, price range — these were already passed to get_restaurants as the query, so trust the search results and do NOT exclude restaurants just because no API field confirms them
 - Wheelchair access requested? Only keep restaurants where wheelchair_accessible_entrance is True
 - Vegetarian/vegan requested? Only keep restaurants where serves_vegetarian_food / serves_vegan_food is True — exclude if False OR missing
-- Reservations requested? Only keep restaurants where reservable is True
+- User is REQUESTING a restaurant that takes reservations ("need reservations", "must be reservable")? Only keep restaurants where reservable is True — exclude if False or missing
+- User is ASKING whether specific restaurants accept reservations ("do they take reservations?", "can I book a table?")? Do NOT filter — return those restaurants and in the message note which ones accept reservations (reservable: true = "yes"), and for any where reservable is null say "we recommend calling ahead to confirm"
 - Wine requested? Only keep restaurants where serves_wine is True
 - Beer requested? Only keep restaurants where serves_beer is True
 - Specific meal requested (breakfast/lunch/dinner)? Only keep restaurants where that field is True
